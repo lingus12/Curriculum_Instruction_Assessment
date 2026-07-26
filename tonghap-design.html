@@ -982,7 +982,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"/><path d="M20.5 13a9 9 0 1 0-2.6 6.4"/></svg>
     </button>
   </div>
-  <span class="version" id="version">v1.4.1</span>
+  <span class="version" id="version">v1.4.4</span>
 </div>
 
 <div class="body">
@@ -1024,7 +1024,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 </script>
 <script>
 "use strict";
-const VERSION = "1.4.1";
+const VERSION = "1.4.4";
 const uid = () => "r" + Math.random().toString(36).slice(2,9);
 
 /* ================= 상태 ================= */
@@ -1711,25 +1711,34 @@ function loadItemInfoFile(a, file){
 }
 /* 수행평가 일람표: 헤더 "영역명(만점 15.00,15.00%)" 다열 구조 */
 function parsePerfRoster(wb){
-  const rows = wbRows(wb);
-  let hi=-1, aliasCol=-1;
-  for(let r=0; r<rows.length; r++){
-    const c = rows[r].findIndex(v=>typeof v==="string" && v.replace(/\s/g,"")==="반/번호");
-    if(c>=0){ hi=r; aliasCol=c; break; }
+  /* v1.4.2 — 나이스 출력 변형 허용: 모든 시트 탐색, 셀 내 줄바꿈, 전각 괄호(（）)·쉼표(，), '만점:' 콜론, '15점', '반영비율 15%' */
+  const norm = v => String(v==null?"":v).replace(/[\s\u00A0]+/g," ").trim();
+  const AREA_RE = /^(.+?)[(（]\s*만점\s*[:：]?\s*([\d.]+)\s*점?\s*[,，、]\s*(?:반영\s*비율\s*[:：]?\s*)?([\d.]+)\s*%?\s*[)）]/;
+  let rows=null, hi=-1, aliasCol=-1;
+  for(const sn of wb.SheetNames){
+    const rs = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, defval:null });
+    for(let r=0; r<rs.length; r++){
+      const c = rs[r].findIndex(v=>typeof v==="string" && norm(v).replace(/\s/g,"")==="반/번호");
+      if(c>=0){ rows=rs; hi=r; aliasCol=c; break; }
+    }
+    if(hi>=0) break;
   }
-  if(hi<0) return {ok:false, errors:["'반/번호' 헤더를 찾지 못했습니다 — 나이스 수행평가 일람표 양식인지 확인하세요"]};
+  if(hi<0) return {ok:false, errors:["'반/번호' 헤더를 찾지 못했습니다 — 나이스의 '수행평가 강의실별 일람표'를 엑셀(xlsx)로 내려받아 수정 없이 업로드하세요"]};
   const areas = [];
   rows[hi].forEach((v,c)=>{
     if(typeof v!=="string") return;
-    const m = v.match(/^(.+?)\(\s*만점\s*([\d.]+)\s*,\s*([\d.]+)\s*%\s*\)/);
+    const m = norm(v).match(AREA_RE);
     if(m) areas.push({ col:c, name:m[1].trim(), max:parseFloat(m[2]), pct:parseFloat(m[3]) });
   });
-  if(!areas.length) return {ok:false, errors:["영역 헤더(만점·비율 표기)를 찾지 못했습니다"]};
+  if(!areas.length){
+    const seen = rows[hi].filter(v=>typeof v==="string" && norm(v)).map(v=>norm(v).slice(0,26)).slice(0,5).join(" | ");
+    return {ok:false, errors:[`영역 헤더(만점·비율 표기)를 찾지 못했습니다 — 머리글에서 읽은 내용: [${seen}] · 영역명 뒤에 "(만점 15.00,15.00%)" 형태가 있어야 합니다. 나이스에서 내려받은 원본 xlsx를 수정 없이 업로드하세요`]};
+  }
   const students = [];
   for(let r=hi+1; r<rows.length; r++){
     const al = rows[r][aliasCol];
     if(al==null) continue;
-    const t = String(al).trim();
+    const t = norm(al);
     if(!/^\d+\s*\/\s*\d+$/.test(t)) continue;         // 응시생수·총점·평균 등 통계 행 제외
     const scores = areas.map(a=>{
       const v = parseFloat(rows[r][a.col]);
@@ -2421,8 +2430,8 @@ function p1Step0(){
   const kwHTML = kws.length
     ? kg.list.map(g=>`<div class="kw-topic"><span class="kw-topic-lb">토픽 · ${esc(g[0].k.w)}</span>${g.map(x=>kwChip(x.k, x.i)).join("")}</div>`).join("")
       + (kg.extra.length ? `<div class="kw-topic"><span class="kw-topic-lb">기타</span>${kg.extra.map(x=>kwChip(x.k, x.i)).join("")}</div>` : "")
-      + `<div class="kw-cta">서로 관련이 깊은 낱말끼리 토픽으로 묶어 보여 줍니다. 후보를 클릭해 선택해 보세요.</div>`
-    : `<div class="inline-note">진술을 작성한 뒤 <b>키워드 확인하기</b>를 누르면 명사 중심 키워드 후보가 토픽별로 나타납니다.</div>`;
+      + `<div class="kw-cta">서로 관련성이 높은 어휘들을 '주제어'로 제시해 줍니다. 이들 중에 핵심 아이디어에 활용할 만한 후보를 선택해 보세요. 실습 2에서 '핵심 아이디어'를 재구성할 때 활용할 수 있습니다.</div>`
+    : ``;
 
   return `
     <div class="guide">기본 정보와 <b>학기단위 성취수준 진술</b>을 준비합니다.</div>
@@ -2499,7 +2508,7 @@ function p1Step2(){
       <option value="교사 관찰·기록"></option><option value="자기평가"></option><option value="동료평가"></option><option value="기타"></option>
     </datalist>
     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px">
-      <button class="btn mini blue" id="btnPerfRoster">수행평가 일람표 불러오기 (.xlsx · 학급 단위 · 복수 선택 가능)</button>
+      <button class="btn mini blue" id="btnPerfRoster">수행평가 일람표 불러오기 (.xlsx · 학급 단위 · 복수 선택 가능)</button> <button type="button" class="help-btn" data-help="g_roster" title="일람표 내려받는 방법">?</button>
       ${cntBadge}
       ${classChipsHTML()}
     </div>
@@ -3618,16 +3627,22 @@ const HELP = {
     b: `<p>정하신 수행평가를 실시하기 위해 <b>어떤 수업을 운영할 것인지</b>, 교과의 성취기준·성취수준을 고려하여 <b>수업 방법</b>을 정하고 <b>진단·형성평가</b>와 <b>피드백</b> 방법을 함께 계획합니다.</p>
        <p>진단평가로 수업의 출발점을 잡고, 형성평가로 방향을 조정하며, 총괄(수행)평가로 도착점을 확인하는 <b>한 흐름</b>이 되어야 합니다.</p>`
   },
+  g_roster: {
+    t: "수행평가 일람표 내려받는 방법 (나이스)",
+    b: `<p>나이스에서 아래 순서로 내려받은 파일을 <b>수정 없이 그대로</b> 업로드하세요.</p>
+       <p><b>나이스</b> → <b>수행평가</b> → <b>수행평가조회/통계</b> → <b>강의실별일람표조회</b> → <b>전체영역</b> 선택 → <b>저장(💾)</b> → <b>XLS Data</b> 다운</p>
+       <p>내려받은 표의 머리글에 <b>반/번호</b>와 <b>영역명(만점 ○○,○○%)</b>이 있으면 정상 파일입니다. 학급별 파일을 여러 개 한꺼번에 선택해도 됩니다.</p>`
+  },
   g_p1perf: {
     t: "수행평가 점검 안내",
-    b: `<p>① 상단 버튼으로 학급별 <b>수행평가 일람표(.xlsx)</b>를 업로드하면 영역명·만점·반영비율·학생 점수가 자동으로 정리됩니다(복수 파일 가능, 같은 반 재업로드 시 교체, 성명 열은 읽지 않음).</p>
+    b: `<p>① <b>나이스</b>에서 <b>'수행평가 강의실별 일람표'</b>를 <b>엑셀(xlsx)</b>로 내려받아, <b>수정 없이 그대로</b> 상단 버튼으로 업로드하세요. 표 머리글에 <b>반/번호</b>와 <b>영역명(만점 ○○,○○%)</b>이 있으면 영역명·만점·반영비율·학생 점수가 자동으로 정리됩니다(복수 파일 가능, 같은 반 재업로드 시 교체, 성명 열은 읽지 않음).</p>
        <p>② 각 카드의 <b>성취수준별 분할점수</b> 칸에 그 수준 최소능력자에게 기대되는 원점수를 입력하면, 학생들이 A~E 수준으로 자동 분류되고 수준 분포가 표시됩니다.</p>
        <p>③ 분포의 수준 칩을 클릭하면 해당 수준의 반/번호 명단을 볼 수 있습니다.</p>`
   },
   g_tableA: {
     t: "표① 수준별 예상 학생 — 작성 안내",
     b: `<p>학기 초 <b>수준별로 예상했던 학생</b>의 반/번호를 적으면, 수행평가 분석 결과로 <b>실제 성취도</b>가 자동 판별됩니다([근거] 버튼으로 평가별 점수 확인, [적용]으로 확정).</p>
-       <p>예상과 실제 성취도를 대조한 <b>결과 분석</b>을 8가지 원인 관점(열 머리글의 ?)에서 살피고, <b>보완·조정 계획</b>을 세우세요. 아래에서 <b>1학기에 활용한 수업 방법</b>의 적절성도 분석해 봅니다.</p>`
+       <p>예상과 실제 성취도를 대조한 <b>결과 분석</b>을 직접 서술하고, <b>보완·조정 계획</b>을 세우세요. 아래에서 <b>1학기에 활용한 수업 방법</b>의 적절성도 분석해 봅니다.</p>`
   },
   g_tableB: {
     t: "표② 한 단원 수업 설계 확인 — 작성 안내",
