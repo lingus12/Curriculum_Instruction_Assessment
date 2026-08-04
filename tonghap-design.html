@@ -535,6 +535,13 @@
   input::placeholder, textarea::placeholder{ color:var(--ink-3); opacity:.5 }
 
   /* v1.5.0 — 판별 근거 팝업 (좌: 점수 근거 / 우: 학기단위 성취수준) */
+  /* v1.5.4 — 분할점수 산출 방식 */
+  .cutmode{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:2px 0 8px }
+  .cutmode-seg button{ height:26px; padding:0 12px; font-size:11.5px }
+  .cutmode-note{ font-size:11.5px; color:var(--ink-3) }
+  .cb-fixed{ display:flex; align-items:center; gap:4px; font-size:11.5px; color:var(--ink-2) }
+  .cb-fixed input{ width:56px }
+  .cb-pt{ color:var(--green-deep); font-size:12px; margin-left:2px }
   /* v1.5.0 — 검색형 선택기 */
   .pick2{ position:relative; margin-top:4px }
   .pick2-btn{ width:100%; height:24px; border:1px solid var(--line); background:var(--paper); border-radius:6px;
@@ -979,7 +986,7 @@
     <h1>교육과정-수업-평가 통합설계</h1>
   </div>
   <div class="credits">
-    <div class="cr-row"><span class="cr-role">운영진</span>대표 (경기도교육청) 최미정 장학사 · (수원여고) 유영택 수석교사 · (수원여고) 박미옥 교사 · (일산동고) 최진영 교사</div>
+    <div class="cr-row"><span class="cr-role">운영진</span>대표 (경기도교육청) 최미정 장학사 · (수원여고) 유영택 수석교사 · (수원여고) 박미욱 교사 · (일산동고) 최진영 교사</div>
     <div class="cr-row"><span class="cr-role">앱 개발</span>일산동고 최진영</div>
     <div class="cr-row cr-copy">본 연수 도구는 현장 교사를 돕기 위한 것으로, 무단 도용 및 사적 목적의 사용은 불가합니다.</div>
     <div class="cr-row cr-copy">🔒 이 도구는 <b>서버 통신 없이 브라우저 안에서만</b> 동작합니다. 작성한 내용과 업로드한 파일(성적 xlsx, 저장 JSON)은 <b>사용자 PC 밖으로 전송·저장되지 않으며</b>, 저장 버튼을 누르면 <b>내 PC에 JSON 파일로만</b> 보관됩니다.</div>
@@ -1018,7 +1025,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"/><path d="M20.5 13a9 9 0 1 0-2.6 6.4"/></svg>
     </button>
   </div>
-  <span class="version" id="version">v1.5.3</span>
+  <span class="version" id="version">v1.5.5</span>
 </div>
 
 <div class="body">
@@ -1060,7 +1067,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 </script>
 <script>
 "use strict";
-const VERSION = "1.5.3";
+const VERSION = "1.5.5";
 const uid = () => "r" + Math.random().toString(36).slice(2,9);
 
 /* ================= 상태 ================= */
@@ -1087,7 +1094,7 @@ function defaultState(){
     },
     p2:{
       idea:{
-        materials:{ coreIdea:"", autonomy:"", vision:"", crosscut:"", grade:"", etc:"", context:"" },   /* v1.5.0 — context는 구버전 호환 휴면 */
+        materials:{ unit:"", coreIdea:"", autonomy:"", vision:"", crosscut:"", grade:"", etc:"", context:"" },   /* v1.5.0 — context는 구버전 호환 휴면 */
         keywords:[],                    // [{id, w, n, sel, src:'추출'|'실습1'|'직접'|'내용요소'}]
         bigIdea:"", checks:{q1:null,q2:null}, note:""
       },
@@ -1299,7 +1306,29 @@ function classifyPts(score, TH){
   }
   return floorLevel();
 }
+/* v1.5.4 — 고정비율 모드: 각 수준 비율(%)×만점 = 분할점수(원점수)를 자동 산출해 a.cuts에 채운다.
+   추정분할 모드: 교사가 원점수를 직접 입력한다. 하위 판별 로직은 모두 a.cuts를 보므로 그대로 동작한다. */
+const FIXED_PCT_DEFAULT = { A:90, B:80, C:70, D:60, E:40 };
+function assessMax(a){
+  const m = (a && a.parsed && a.parsed.ok) ? a.parsed.max : parseFloat(a && a.max);
+  return (m && !isNaN(m)) ? m : null;
+}
+function fixedPct(a, lv){
+  const v = parseFloat((a.cutPct||{})[lv]);
+  return isNaN(v) ? FIXED_PCT_DEFAULT[lv] : v;
+}
+function syncFixedCuts(a){
+  if(!a || a.cutMode !== "고정") return;
+  const max = assessMax(a);
+  if(max == null) return;
+  if(!a.cuts) a.cuts = {};
+  cutLevels().forEach(lv=>{
+    const pt = Math.round(max * fixedPct(a, lv) / 100 * 2) / 2;   /* 0.5점 단위 */
+    a.cuts[lv] = String(pt);
+  });
+}
 function expectCuts(a){
+  if(a && a.cutMode === "고정") syncFixedCuts(a);
   /* v0.18.0 — 성취수준별 분할점수를 카드에 직접 입력(a.cuts, 원점수). v1.2.0 용어 통일.
      구버전의 요소별 배점 합산 방식은 expectCutsFromElements()로 휴면 보존, migrate가 1회 이관. */
   if(!a || a.type!=="수행") return null;
@@ -2068,7 +2097,7 @@ function renderMiniRemote(){
   let mr = document.getElementById("miniRemote");
   const show = activeTab==="p1" && activeStep.p1===1;
   const list = show ? state.p1.assess.list.filter(a=>a.type==="수행") : [];
-  if(!show || list.length < 2){ if(mr) mr.remove(); return; }
+  if(!show || list.length < 1){ if(mr) mr.remove(); return; }   /* v1.5.4 — 1건부터 표시 */
   if(!mr){
     mr = document.createElement("div");
     mr.id = "miniRemote"; mr.className = "mini-remote";
@@ -2347,6 +2376,45 @@ function cutInputsHTML(a){
         <input type="number" data-acut="${l}" value="${esc(raw==null?"":raw)}" min="0" step="0.5" placeholder="점"></div>`;
     }).join("")}<div class="cut-floor">${floorLevel()} = ${cutLevels()[cutLevels().length-1]} 최소 미만</div></div>`;
 }
+/* v1.5.4 — 분할점수 산출 방식 선택 */
+function cutModeHTML(a){
+  const mode = a.cutMode === "고정" ? "고정" : "추정";
+  const max = assessMax(a);
+  return `<div class="cutmode">
+    <div class="seg cutmode-seg" data-cutmode="${a.id}">
+      <button type="button" class="${mode==="고정"?"on-y":""}" data-v="고정">고정비율 사용</button>
+      <button type="button" class="${mode==="추정"?"on-y":""}" data-v="추정">추정분할 사용</button>
+    </div>
+    <span class="cutmode-note">${mode==="고정"
+      ? (max!=null
+          ? `수준별 비율(%)을 만점 ${fmt1(max)}점에 적용해 분할점수를 자동 산출합니다.`
+          : `만점을 입력하거나 일람표를 불러오면 비율에 따라 자동 산출됩니다.`)
+      : `각 수준 최소능력자의 변별 점수를 직접 입력합니다.`}</span>
+  </div>`;
+}
+function cutBoxesHTML(a){
+  const fixed = a.cutMode === "고정";
+  const max = assessMax(a);
+  if(fixed) syncFixedCuts(a);
+  return `<div class="cuts">
+    ${cutLevels().map(l=>{
+      if(fixed){
+        const pct = fixedPct(a, l);
+        const pt = (max!=null) ? fmt1(Math.round(max*pct/100*2)/2)+"점" : "–";
+        return `<div class="cut-box">
+          <span class="cb-lv"><span class="cb-dot" style="background:${LV_COLORS[l]}"></span>${l} 기대</span>
+          <span class="cb-fixed"><input type="number" data-fcut="${l}" value="${esc(pct)}" min="0" max="100" step="1">%
+            <b class="cb-pt">${pt}</b></span>
+        </div>`;
+      }
+      return `<div class="cut-box">
+        <span class="cb-lv"><span class="cb-dot" style="background:${LV_COLORS[l]}"></span>${l} 기대</span>
+        <input type="number" data-mcut="${l}" value="${esc((a.cuts||{})[l]??"")}" min="0" step="0.5" placeholder="점">
+      </div>`;
+    }).join("")}
+    <div class="cut-floor">${floorLevel()} = ${cutLevels()[cutLevels().length-1]} 기대 미만</div>
+  </div>`;
+}
 function assessCardsHTML(type){
   const items = state.p1.assess.list.filter(a=>a.type===type);
   if(!items.length){
@@ -2435,14 +2503,8 @@ function assessCardsHTML(type){
         ${stdRows}
         <button class="btn mini" data-add-std="${a.id}">+ 성취기준 추가</button>
         <div class="sub-label">성취수준별 분할점수 <button type="button" class="help-btn" data-help="mincomp" title="개념 설명 보기">?</button><span class="help-cap" data-help="mincomp">분할점수와 최소능력자</span></div>
-        <div class="cuts">
-          ${cutLevels().map(l=>`
-            <div class="cut-box">
-              <span class="cb-lv"><span class="cb-dot" style="background:${LV_COLORS[l]}"></span>${l} 기대</span>
-              <input type="number" data-mcut="${l}" value="${esc((a.cuts||{})[l]??"")}" min="0" step="0.5" placeholder="점">
-            </div>`).join("")}
-          <div class="cut-floor">${floorLevel()} = ${cutLevels()[cutLevels().length-1]} 기대 미만</div>
-        </div>
+        ${cutModeHTML(a)}
+        ${cutBoxesHTML(a)}
         ${expectCutsLineHTML(a)}
         <div class="sub-label">성적 <span style="font-weight:400;color:var(--ink-3)">(상단의 '수행평가 일람표 불러오기'로 자동 정리 · 반/번호만 사용)</span></div>
         ${sheetChips}
@@ -2867,7 +2929,7 @@ function showStudentDetail(rowId){
   const rowsHtml = bk.rows.map(x=> x.missing
     ? `<tr><td>${esc(x.name)}</td><td class="num" colspan="3" style="color:var(--red-deep)">해당 평가에 없음 (0점 합산)</td></tr>`
     : `<tr><td>${esc(x.name)}</td><td class="num">${fmt1(x.score)} / ${fmt1(x.max)}</td><td class="num">${fmt1(x.pct)}%</td><td>${lvPill(x.level)}</td></tr>`).join("");
-  const fin = bk.final ? `<tr style="background:var(--bg)"><td><b>성취도</b> <button type="button" class="help-btn" data-help="g_stuFinal" title="성취도 안내">?</button></td>
+  const fin = bk.final ? `<tr style="background:var(--bg)"><td><b>성취도</b></td>
       <td class="num"><b>${fmt1(bk.final.total)}</b> / ${fmt1(bk.maxSum)}</td>
       <td class="num">${bk.final.pct!=null?fmt1(bk.final.pct)+"%":"–"}</td><td>${lvPill(bk.final.level)}</td></tr>` : "";
   const ov = document.createElement("div");
@@ -2984,6 +3046,11 @@ function p2Step0(){
     <div class="p2-intro">
       <div class="p2-intro-title">교육과정-수업-평가 통합설계 점검 및 재작성</div>
       <p class="p2-intro-desc">2학기 교수·학습 계획 및 평가계획을 검토하고 이를 재작성해 보는 실습입니다.</p>
+    </div>
+    <div class="field" style="margin-bottom:10px">
+      <label>핵심 아이디어를 재구성하고자 하는 단원</label>
+      <input type="text" data-bind2="idea.materials.unit" value="${esc(d.materials.unit||"")}" placeholder=""
+        style="width:100%;height:34px;padding:0 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;font-family:inherit">
     </div>
     <div class="field" style="margin-bottom:10px">
       <label>교과 핵심 아이디어 (교육과정 원문 붙여넣기)</label>
@@ -3608,6 +3675,7 @@ function renderContent(){
   initTableResize(c);
   c.scrollTop = keepScroll;
   restoreFocus(c, fk);
+  renderMiniRemote();   /* v1.5.4 — 일람표 업로드 등으로 카드가 늘면 리모컨도 즉시 반영 */
 }
 
 /* 지연 렌더: change(blur) 시점의 동기 재렌더링이 Tab 포커스 이동을 끊는 문제 방지 */
@@ -3740,7 +3808,9 @@ const HELP = {
   g_tableA: {
     t: "표① 수준별 예상 학생 — 작성 안내",
     b: `<p>학기 초 <b>수준별로 예상했던 학생</b>의 반/번호를 적으면, 수행평가 분석 결과로 <b>실제 성취도</b>가 자동 판별됩니다([근거] 버튼으로 평가별 점수 확인, [적용]으로 확정).</p>
-       <p>예상과 실제 성취도를 대조한 <b>결과 분석</b>을 직접 서술하고, <b>보완·조정 계획</b>을 세우세요. 아래에서 <b>1학기에 활용한 수업 방법</b>의 적절성도 분석해 봅니다.</p>`
+       <p>예상과 실제 성취도를 대조한 <b>결과 분석</b>을 직접 서술하고, <b>보완·조정 계획</b>을 세우세요. 아래에서 <b>1학기에 활용한 수업 방법</b>의 적절성도 분석해 봅니다.</p>
+       <p style="margin-top:10px;padding-top:8px;border-top:1px solid var(--line)"><b>실제 성취도(성취도)에 대하여</b> — 연수를 위한 <b>가정된 결과</b>입니다. 실제 평가에서는 정기시험 결과까지 종합한 결과가 학기말 성취도입니다.</p>
+       <p>여기서 성취도의 계산 기준은 앞의 <b>‘수행평가 점검’ 단계에서 설정하신 성취수준별 분할점수(변별 기준)의 합</b>입니다. 예를 들어 A의 변별 점수가 각각 25점, 15점이었다면, 전체 수행평가의 A 변별 점수는 40점이 됩니다.</p>`
   },
   g_tableB: {
     t: "표② 한 단원 수업 설계 확인 — 작성 안내",
@@ -4590,7 +4660,7 @@ function bindContentEvents(){
       commit();
       state.p1.assess.list.push({
         id:uid(), name:"", type:btn.dataset.addAssess,
-        weight:"", max:"100", cuts:{},
+        weight:"", max:"100", cuts:{}, cutMode:"추정", cutPct:Object.assign({}, FIXED_PCT_DEFAULT),
         mode: btn.dataset.addAssess==="정기" ? "xlsx" : "score",
         raw:"", parsed:null, iteminfo:null, items:[], oxSheets:[],
         task:"", stds:[], elements:[], sheets:[]
@@ -4601,7 +4671,30 @@ function bindContentEvents(){
   c.querySelectorAll("[data-assess]").forEach(card=>{
     const a = state.p1.assess.list.find(x=>x.id===card.dataset.assess);
     if(!a) return;
+    /* v1.5.4 — 분할점수 산출 방식 전환 (고정비율 / 추정분할) */
+    card.querySelectorAll("[data-cutmode] button").forEach(b=>{
+      b.addEventListener("click", ()=>{
+        const next = b.dataset.v;
+        if((a.cutMode==="고정"?"고정":"추정") === next) return;
+        commit();
+        a.cutMode = next;
+        if(next === "고정"){
+          if(!a.cutPct) a.cutPct = Object.assign({}, FIXED_PCT_DEFAULT);
+          syncFixedCuts(a);
+        }
+        scheduleRender();
+      });
+    });
     card.addEventListener("change", e=>{
+      const fcut = e.target.closest("[data-fcut]");
+      if(fcut){
+        commit();
+        if(!a.cutPct) a.cutPct = {};
+        a.cutPct[fcut.dataset.fcut] = fcut.value;
+        syncFixedCuts(a);
+        scheduleRender();
+        return;
+      }
       const acut = e.target.closest("[data-acut]");
       if(acut){
         commit();
@@ -4892,6 +4985,8 @@ function migrate(data){
         if(typeof a.task!=="string") a.task="";
         if(!Array.isArray(a.stds)) a.stds=[];
         if(!Array.isArray(a.elements)) a.elements=[];
+        if(a.cutMode !== "고정" && a.cutMode !== "추정") a.cutMode = "추정";   /* v1.5.4 — 기존 파일은 직접 입력(추정) 유지 */
+        if(!a.cutPct || typeof a.cutPct !== "object") a.cutPct = Object.assign({}, FIXED_PCT_DEFAULT);
         if(!Array.isArray(a.sheets)) a.sheets=[];
         if(a.parsed && a.parsed.ok && !a.sheets.length && Array.isArray(a.parsed.students)){
           const p=a.parsed;
