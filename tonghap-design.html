@@ -1024,7 +1024,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"/><path d="M20.5 13a9 9 0 1 0-2.6 6.4"/></svg>
     </button>
   </div>
-  <span class="version" id="version">v1.5.6</span>
+  <span class="version" id="version">v1.5.7</span>
 </div>
 
 <div class="body">
@@ -1066,7 +1066,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 </script>
 <script>
 "use strict";
-const VERSION = "1.5.6";
+const VERSION = "1.5.7";
 const uid = () => "r" + Math.random().toString(36).slice(2,9);
 
 /* ================= 상태 ================= */
@@ -4926,8 +4926,12 @@ function migrate(data){
   if(!data || typeof data!=="object") return d;
   d.meta = Object.assign(d.meta, data.meta||{});
   if(data.p1 && typeof data.p1==="object"){
-    for(const k of ["setup","exam","perf","assess","lesson","result","students","reflect"]){
-      if(data.p1[k]) d.p1[k] = Object.assign(d.p1[k], data.p1[k]);
+    /* v1.5.7 — 하드코딩 목록에 unit(표②)이 빠져 저장 내용이 사라지던 버그 수정.
+       앞으로 항목이 늘어도 누락되지 않도록 스키마의 모든 키를 순회한다. */
+    for(const k of Object.keys(d.p1)){
+      if(data.p1[k] && typeof data.p1[k]==="object" && typeof d.p1[k]==="object" && !Array.isArray(d.p1[k])){
+        d.p1[k] = Object.assign(d.p1[k], data.p1[k]);
+      }
     }
     d.p1.setup.levels = Object.assign({A:"",B:"",C:"",D:"",E:""}, d.p1.setup.levels);
     d.p1.setup.cuts.type = "고정";   // v0.11.0: 고정분할점수 전용
@@ -5043,7 +5047,7 @@ function migrate(data){
   }
   /* 실습 2 병합 (구버전 JSON은 p2가 비어 있으므로 기본값 유지) */
   if(data.p2 && typeof data.p2==="object"){
-    for(const k of ["idea","stds","matrix","task","method","fa","feedback","content","evalPlan","design","precheck"]){
+    for(const k of Object.keys(d.p2)){   /* v1.5.7 — 스키마 전체 순회로 일반화 */
       if(data.p2[k]) d.p2[k] = Object.assign(d.p2[k], data.p2[k]);
     }
     d.p2.idea.materials = Object.assign({coreIdea:"",autonomy:"",vision:"",context:""}, d.p2.idea.materials||{});
