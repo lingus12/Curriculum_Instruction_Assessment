@@ -535,6 +535,12 @@
   input::placeholder, textarea::placeholder{ color:var(--ink-3); opacity:.5 }
 
   /* v1.5.0 — 판별 근거 팝업 (좌: 점수 근거 / 우: 학기단위 성취수준) */
+  /* v1.5.8 — 학기단위 성취수준 주제어 참고 표시 */
+  .kw-ref{ display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-top:6px;
+           background:var(--bg); border:1px dashed var(--line); border-radius:8px; padding:7px 10px }
+  .kw-ref-lb{ font-size:11px; font-weight:700; color:var(--ink-3); margin-right:2px }
+  .kw-ref-chip{ font-size:11.5px; color:var(--ink-2); background:var(--paper);
+                border:1px solid var(--line); border-radius:999px; padding:2px 9px }
   /* v1.5.4 — 분할점수 산출 방식 */
   .cutmode{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:2px 0 8px }
   .cutmode-seg button{ height:26px; padding:0 12px; font-size:11.5px }
@@ -1024,7 +1030,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"/><path d="M20.5 13a9 9 0 1 0-2.6 6.4"/></svg>
     </button>
   </div>
-  <span class="version" id="version">v1.5.7</span>
+  <span class="version" id="version">v1.5.9</span>
 </div>
 
 <div class="body">
@@ -1066,7 +1072,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 </script>
 <script>
 "use strict";
-const VERSION = "1.5.7";
+const VERSION = "1.5.9";
 const uid = () => "r" + Math.random().toString(36).slice(2,9);
 
 /* ================= 상태 ================= */
@@ -1175,8 +1181,14 @@ const STEPS_OF = { p1:P1_STEPS, p2:P2_STEPS };
 let undoStack = [], redoStack = [];
 const snap = () => JSON.stringify(state);
 let dirty = false;   /* v0.15.0 — 마지막 저장 이후 변경 여부 */
+let sessionTimer = null;
+function scheduleSessionBackup(){
+  if(sessionTimer) clearTimeout(sessionTimer);
+  sessionTimer = setTimeout(()=>{ if(typeof sessionBackup==="function") sessionBackup(); }, 800);
+}
 function commit(){
   dirty = true;
+  scheduleSessionBackup();   /* v1.5.9 — 작성 중 내용을 세션에 자동 백업 */
   undoStack.push(snap());
   if(undoStack.length>60) undoStack.shift();
   redoStack = [];
@@ -1189,6 +1201,7 @@ function doReset(){
   openTabs = []; openSteps = { p1:[], p2:[] };
   activeTab = null; activeStep = { p1:0, p2:0 };
   scrollMem = {}; fileHandle = null; dirty = false;
+  if(typeof sessionClear==="function") sessionClear();   /* v1.5.9 */
   closeHelp();
   syncMeta(); renderAll();
   toast("화면을 초기화했습니다 — 새 실습을 시작하세요");
@@ -2527,7 +2540,7 @@ function p1Step0(){
   const kwHTML = kws.length
     ? kg.list.map(g=>`<div class="kw-topic"><span class="kw-topic-lb">토픽 · ${esc(g[0].k.w)}</span>${g.map(x=>kwChip(x.k, x.i)).join("")}</div>`).join("")
       + (kg.extra.length ? `<div class="kw-topic"><span class="kw-topic-lb">기타</span>${kg.extra.map(x=>kwChip(x.k, x.i)).join("")}</div>` : "")
-      + `<div class="kw-cta">서로 관련성이 높은 어휘들을 '주제어'로 제시해 줍니다. 이들 중에 핵심 아이디어에 활용할 만한 후보를 선택해 보세요. 실습 2에서 '핵심 아이디어'를 재구성할 때 활용할 수 있습니다.</div>`
+      + `<div class="kw-cta">수업 성찰을 위해 학기 단위 성취수준의 주요 키워드를 확인해 보세요.</div>`
     : ``;
 
   return `
@@ -3064,11 +3077,16 @@ function p2Step0(){
     </div>
     <div class="p2-axis-tools" style="margin-top:12px">
       <button class="btn mini blue" id="p2ExtractKw">핵심 아이디어에서 핵심어 추출</button>
-      <button class="btn mini blue" id="p2ImportStmtKw">학기단위 성취수준 키워드 가져오기</button>
       <input type="text" id="p2KwInput" placeholder="핵심어 직접 추가">
       <button class="btn mini" id="p2KwAdd">추가</button>
     </div>
     <div class="p2-keyword-bank">${kwChips || `<span style="font-size:12px;color:var(--ink-3)">아직 핵심어가 없습니다 — 추출하거나 직접 추가하세요</span>`}</div>
+    ${(()=>{   /* v1.5.8 — 실습1의 학기단위 성취수준 주제어는 '참고'로만 표시 (학기가 달라 그대로 가져오지 않는다) */
+      const ref = (state.p1.setup.stmt.keywords||[]).filter(k=>k.sel).map(k=>k.w);
+      if(!ref.length) return "";
+      return `<div class="kw-ref"><span class="kw-ref-lb">참고 · 학기 단위 성취수준의 주요 키워드</span>${
+        ref.map(w=>`<span class="kw-ref-chip">${esc(w)}</span>`).join("")}</div>`;
+    })()}
     <div class="inline-note">칩을 클릭해 <b>재구성의 재료</b>로 선택하세요 — ×로 삭제할 수 있습니다.</div>
     <div class="p2-big-idea-box">
       <div class="sub-label" style="margin-top:0">핵심 아이디어 재구성하기</div>
@@ -3790,7 +3808,8 @@ const HELP = {
     t: "저장 방식과 개인정보 보호",
     b: `<p>🔒 이 도구는 <b>서버 통신 없이 브라우저 안에서만</b> 동작합니다.</p>
        <p>작성한 내용과 업로드한 파일(성적 xlsx, 저장 JSON)은 <b>사용자 PC 밖으로 전송·저장되지 않으며</b>, <b>저장</b> 버튼을 누르면 <b>내 PC에 JSON 파일로만</b> 보관됩니다.</p>
-       <p>학생 정보는 <b>반/번호</b>만 사용하고 성명 열은 읽지 않습니다.</p>`
+       <p>학생 정보는 <b>반/번호</b>만 사용하고 성명 열은 읽지 않습니다.</p>
+       <p>뒤로가기·새로고침으로 내용이 사라지지 않도록, 작성 중인 내용은 <b>브라우저 탭 안의 임시 영역</b>에만 잠시 보관됩니다. <b>탭을 닫으면 자동으로 지워지며</b>, [화면 초기화]를 누르면 즉시 삭제됩니다.</p>`
   },
   g_stuFinal: {
     t: "성취도 — 이 실습에서의 의미",
@@ -3981,17 +4000,6 @@ function bindP2Events(c){
     p.idea.keywords.push({ id:uid(), w:word, n:n||0, sel:false, src });
     return true;
   };
-  const bStmtKw = c.querySelector("#p2ImportStmtKw");
-  if(bStmtKw) bStmtKw.addEventListener("click", ()=>{
-    /* v1.5.0 — 실습1 준비 '키워드 확인하기'에서 선택한 주제어를 재료로 가져온다 */
-    const picked = (state.p1.setup.stmt.keywords||[]).filter(k=>k.sel);
-    if(!picked.length){ toast("실습 1 준비 단계에서 '키워드 확인하기' 후 주제어를 선택해 주세요"); return; }
-    commit();
-    let added = 0;
-    picked.forEach(k=>{ if(addKw(k.w, "성취수준", k.n)) added++; });
-    renderContent();
-    toast(added ? `학기단위 성취수준 주제어 ${added}개를 가져왔습니다` : "이미 모두 가져왔습니다");
-  });
   const bEx = c.querySelector("#p2ExtractKw");
   if(bEx) bEx.addEventListener("click", ()=>{
     const m = p.idea.materials;
@@ -5121,6 +5129,35 @@ function toast(msg){
 }
 
 /* ================= 전역 이벤트 ================= */
+/* v1.5.9 — 뒤로가기 후 앞으로가기(또는 새로고침)로 돌아왔을 때 작성 내용이 남아 있도록 세션 복구.
+   탭을 닫으면 자동으로 사라지는 sessionStorage만 사용하며(브라우저 밖으로 전송 없음),
+   뒤로가기 동작 자체는 막지 않는다. */
+const SKEY = "tonghap:session";
+function sessionBackup(){
+  try{ sessionStorage.setItem(SKEY, JSON.stringify(state)); }catch(e){}
+}
+function sessionClear(){
+  try{ sessionStorage.removeItem(SKEY); }catch(e){}
+}
+function sessionRestore(){
+  let raw = null;
+  try{ raw = sessionStorage.getItem(SKEY); }catch(e){ return false; }
+  if(!raw) return false;
+  try{
+    const data = JSON.parse(raw);
+    if(!data || typeof data !== "object") return false;
+    state = migrate(data);
+    return true;
+  }catch(e){ return false; }
+}
+window.addEventListener("pagehide", sessionBackup);
+window.addEventListener("beforeunload", e=>{
+  sessionBackup();
+  if(!dirty) return;
+  e.preventDefault();
+  e.returnValue = "";   /* 저장하지 않은 내용이 있을 때만 새로고침·탭 닫기 경고 */
+});
+
 /* v1.5.0 — 검색형 선택기: 바깥을 클릭하면 닫힌다 */
 document.addEventListener("click", ()=>{ document.querySelectorAll(".pick2-pop").forEach(x=>x.remove()); });
 
@@ -5168,7 +5205,14 @@ document.addEventListener("keydown", e=>{
 });
 
 document.getElementById("version").textContent = "v"+VERSION;
+/* v1.5.9 — 직전 세션(뒤로가기·새로고침 등)에서 작성하던 내용이 있으면 되살린다 */
+const restored = sessionRestore();
+syncMeta();
 renderAll();
+if(restored){
+  dirty = true;
+  toast("직전에 작성하던 내용을 되살렸습니다 — 새로 시작하려면 [화면 초기화]를 누르세요");
+}
 </script>
 </body>
 </html>
