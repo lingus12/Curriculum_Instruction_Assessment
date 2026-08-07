@@ -390,7 +390,11 @@
     .step{ border:none; box-shadow:none; margin:0 }
     .step-body{ padding:0 }
     .rep-head{ margin-top:0 }
-    .rep-full{ break-inside:avoid }
+    .rep-full{ break-inside:auto }                 /* v1.6.0 — 내용이 길면 다음 쪽으로 이어지게 (잘림 방지) */
+    .rep-full-title{ break-after:avoid }
+    .rep-tbl tr{ break-inside:avoid }
+    .p2-output-card{ break-inside:avoid }
+    .rep-tbl td, .rep-tbl th{ white-space:normal !important; word-break:break-word }
     .rep-full-title{ font-size:11px }
     .rep-badge{ font-size:8.5px; padding:1px 6px }
     .p2-output-grid{ display:grid; grid-template-columns:1fr 1fr; gap:6px }
@@ -535,6 +539,15 @@
   input::placeholder, textarea::placeholder{ color:var(--ink-3); opacity:.5 }
 
   /* v1.5.0 — 판별 근거 팝업 (좌: 점수 근거 / 우: 학기단위 성취수준) */
+  /* v1.6.0 — 내용(주제) 후보 칩 */
+  .p2-cand{ display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin:6px 0 2px;
+            background:var(--green-050); border:1px solid var(--green); border-radius:8px; padding:7px 10px }
+  .p2-cand-lb{ font-size:11px; font-weight:800; color:var(--green-deep); margin-right:2px }
+  .p2-cand-chip{ font-size:12px; background:var(--paper); border:1px solid var(--line);
+                 border-radius:999px; padding:3px 10px; cursor:pointer; font-family:inherit; color:var(--ink) }
+  .p2-cand-chip:hover{ border-color:var(--green); color:var(--green-deep); font-weight:700 }
+  .p2-cand-chip.is-dup{ opacity:.5; cursor:default }
+  .p2-cand-x{ margin-left:auto; border:none; background:transparent; color:var(--ink-3); cursor:pointer; font-size:15px }
   /* v1.5.8 — 학기단위 성취수준 주제어 참고 표시 */
   .kw-ref{ display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-top:6px;
            background:var(--bg); border:1px dashed var(--line); border-radius:8px; padding:7px 10px }
@@ -1030,7 +1043,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"/><path d="M20.5 13a9 9 0 1 0-2.6 6.4"/></svg>
     </button>
   </div>
-  <span class="version" id="version">v1.5.9</span>
+  <span class="version" id="version">v1.6.0</span>
 </div>
 
 <div class="body">
@@ -1072,7 +1085,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 </script>
 <script>
 "use strict";
-const VERSION = "1.5.9";
+const VERSION = "1.6.0";
 const uid = () => "r" + Math.random().toString(36).slice(2,9);
 
 /* ================= 상태 ================= */
@@ -2851,16 +2864,15 @@ function p1TableA(){
     const bk = has ? studentBreakdown(r.alias) : null;
     const auto = (bk && bk.final) ? bk.final.level : null;
     const autoCell = auto
-      ? `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">자동 ${lvPill(auto)}
+      ? `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">${lvPill(auto)}
           <button type="button" class="btn mini" style="padding:1px 8px;font-size:11px" data-stu-detail="${r.id}">근거</button>
-          ${auto!=="?"&&auto!==r.final ? `<button type="button" style="border:none;background:var(--blue);color:#fff;font-size:10.5px;font-weight:700;border-radius:9px;padding:2px 8px;cursor:pointer" data-apply-final="${r.id}" data-apply-level="${esc(auto)}">적용</button>` : ``}
         </div>`
       : has ? `<span style="color:var(--red-deep);font-size:11.5px">일람표에 없음 — 표기 확인</span>`
       : `<span style="color:var(--ink-3);font-size:11.5px">반/번호 입력 시 자동 판별</span>`;
     return `<tr data-stu="${r.id}">
       <td style="width:46px;text-align:center">${lvPill(r.level)}</td>
       <td style="width:104px"><input type="text" data-stu-cell="alias" value="${esc(r.alias)}" placeholder="예: 1/7" style="width:100%"></td>
-      <td style="width:168px">${autoCell}<select data-stu-cell="final" style="margin-top:5px;width:100%">${levelOptions(r.final)}</select></td>
+      <td style="width:140px">${autoCell}</td>
       <td><textarea class="cellta" rows="2" data-stu-cell="causeText">${esc(r.causeText)}</textarea></td>
       <td><textarea class="cellta" rows="1" data-stu-cell="action" placeholder="보완·조정 계획">${esc(r.action)}</textarea></td>
     </tr>`;
@@ -3081,12 +3093,7 @@ function p2Step0(){
       <button class="btn mini" id="p2KwAdd">추가</button>
     </div>
     <div class="p2-keyword-bank">${kwChips || `<span style="font-size:12px;color:var(--ink-3)">아직 핵심어가 없습니다 — 추출하거나 직접 추가하세요</span>`}</div>
-    ${(()=>{   /* v1.5.8 — 실습1의 학기단위 성취수준 주제어는 '참고'로만 표시 (학기가 달라 그대로 가져오지 않는다) */
-      const ref = (state.p1.setup.stmt.keywords||[]).filter(k=>k.sel).map(k=>k.w);
-      if(!ref.length) return "";
-      return `<div class="kw-ref"><span class="kw-ref-lb">참고 · 학기 단위 성취수준의 주요 키워드</span>${
-        ref.map(w=>`<span class="kw-ref-chip">${esc(w)}</span>`).join("")}</div>`;
-    })()}
+
     <div class="inline-note">칩을 클릭해 <b>재구성의 재료</b>로 선택하세요 — ×로 삭제할 수 있습니다.</div>
     <div class="p2-big-idea-box">
       <div class="sub-label" style="margin-top:0">핵심 아이디어 재구성하기</div>
@@ -3173,6 +3180,7 @@ function p2Step1(){
 }
 
 /* 2-3 수행평가 영역명 매트릭스 */
+let p2TopicCands = [];   /* v1.6.0 — 성취기준에서 뽑은 내용(주제) 후보 */
 function p2Step2(){
   const mx = state.p2.matrix;
   const topicChips = mx.topics.map(t=>`<span class="p2-axis-chip">${esc(t.name)}<span class="kx" data-p2topic-del="${t.id}" title="삭제">×</span></span>`).join("");
@@ -3193,11 +3201,21 @@ function p2Step2(){
   return `
     <div class="guide"><b>가로 축 = 내용(주제) · 세로 축 = 방법</b>. 셀을 클릭해 평가하려는 조합을 선택하세요. <button type="button" class="help-btn" data-help="g_matrix" title="매트릭스 안내">?</button></div>
     <div class="sub-label">가로 축 — 내용(주제)</div>
+    <div class="inline-note">평가할 <b>학습 내용·단원 주제</b>를 적습니다(예: 삼각비, 원의 성질 / 설득하는 글). <b>쉼표나 줄바꿈으로 여러 개를 한 번에</b> 넣을 수 있습니다.</div>
     <div class="p2-axis-tools">
-      <input type="text" id="p2TopicInput" placeholder="내용(주제) 추가 (예: 설득하는 글)">
-      <button class="btn mini" id="p2TopicAdd">추가</button>
-      <button class="btn mini blue" id="p2TopicFromKw">1단계 선택 핵심어를 내용 축으로 가져오기</button>
+      <input type="text" id="p2TopicInput" placeholder="예: 삼각비, 원의 성질">
+      <button class="btn mini primary" id="p2TopicAdd">추가</button>
+      <button class="btn mini blue" id="p2TopicFromStd">성취기준에서 주제 후보 뽑기</button>
+      ${mx.topics.length ? `<button class="btn mini" id="p2TopicClear">전체 지우기</button>` : ``}
     </div>
+    ${(()=>{
+      if(!p2TopicCands.length) return "";
+      return `<div class="p2-cand"><span class="p2-cand-lb">주제 후보 — 클릭해 추가</span>${
+        p2TopicCands.map((w,i)=>{
+          const dup = mx.topics.some(t=>t.name===w);
+          return `<button type="button" class="p2-cand-chip${dup?" is-dup":""}" data-p2topic-cand="${esc(w)}"${dup?" disabled":""}>${esc(w)}${dup?" ✓":""}</button>`;
+        }).join("")}<button type="button" class="p2-cand-x" id="p2TopicCandClose" title="후보 닫기">×</button></div>`;
+    })()}
     <div class="p2-axis-tools">${topicChips || `<span style="font-size:11.5px;color:var(--ink-3)">아직 없음</span>`}</div>
     <div class="sub-label">세로 축 — 방법</div>
     <div class="p2-axis-tools">
@@ -3504,13 +3522,12 @@ function p2Report(){
   const segBadge = v => v ? `<span class="rep-badge rb-${v}">${segTxt(v)}</span>` : `<span class="rep-badge rb-x">—</span>`;
   const rateBadge = v => v==="y"?`<span class="rep-badge rb-y">우수</span>`:v==="m"?`<span class="rep-badge rb-m">보통</span>`:v==="n"?`<span class="rep-badge rb-n">미흡</span>`:`<span class="rep-badge rb-x">—</span>`;
   const chkBadge = v => v==="y"?`<span class="rep-badge rb-y">적정</span>`:v==="m"?`<span class="rep-badge rb-m">부분</span>`:v==="n"?`<span class="rep-badge rb-n">보완 필요</span>`:`<span class="rep-badge rb-x">—</span>`;
-  /* 2쪽 이내 요약 원칙 — 긴 서술은 잘라 요지만 남긴다 (전문은 실습지 본문에 보존) */
-  const clip = (t, m) => { t = String(t||"").trim(); return t.length>m ? esc(t.slice(0,m))+"…" : esc(t); };
-  const lineClip = (t, ln, m) => {
-    const ls = String(t||"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-    const shown = ls.slice(0, ln).map(x=>clip(x, m||60)).join("<br>");
-    return shown + (ls.length>ln ? `<br><span style="color:var(--ink-3)">… 외 ${ls.length-ln}건</span>` : "");
-  };
+  /* v1.6.0 — 보고서는 협의·발표 자료이므로 작성한 내용을 '전부' 싣는다.
+     (기존에는 글자 수로 잘라 요지만 남겼으나, 뒤 내용이 사라져 보고서 의미가 훼손됨)
+     두 번째 인자는 이전 호출부와의 호환을 위해 남겨 두고 무시한다. */
+  const nl2br = t => esc(String(t||"").trim()).replace(/\r?\n/g, "<br>");
+  const clip = (t, _m) => nl2br(t);
+  const lineClip = (t, _ln, _m) => nl2br(t);
   const setup = s1.setup;
   const infoLine = [setup.subject, setup.course, setup.grade, [setup.year, setup.semester].filter(Boolean).join(" ")]
     .filter(x=>(x||"").trim()).map(esc).join(" · ");
@@ -3563,7 +3580,7 @@ function p2Report(){
     <thead><tr><th>예상 수준</th><th>학생</th><th>실제 성취도</th><th>결과 분석</th><th>보완·조정 계획</th></tr></thead>
     <tbody>${stuRows.map(r=>{
       const auto = (r.alias||"").trim() ? finalByAlias(r.alias) : null;
-      const act = r.final || (auto ? auto.level : "");
+      const act = (auto ? auto.level : "") || r.final;   /* v1.6.0 — 자동 판별 결과를 그대로 사용 */
       return `<tr><td>${lvPill(r.level)}</td><td>${esc(r.alias)||"—"}</td>
       <td>${act ? lvPill(act) : "—"}</td>
       <td>${(r.cause||"").trim()?`${esc((r.cause).split(" — ")[0])} — `:""}${clip(r.causeText,72)}</td>
@@ -3614,7 +3631,7 @@ function p2Report(){
     ${stratTbl}</div>`;
 
   return `
-    <div class="guide">실습 1과 실습 2의 <b>주요 내용만 요약</b>한 보고서로, <b>협의·발표 자료</b>로 바로 쓸 수 있게 구성했습니다. 아래 버튼으로 <b>인쇄하거나 PDF로 저장</b>하세요 — 인쇄 대화상자에서 대상을 "PDF로 저장"으로 선택하면 됩니다.</div>
+    <div class="guide">실습 1과 실습 2에서 <b>작성한 내용을 모두</b> 정리한 보고서로, <b>협의·발표 자료</b>로 바로 쓸 수 있게 구성했습니다. 아래 버튼으로 <b>인쇄하거나 PDF로 저장</b>하세요 — 인쇄 대화상자에서 대상을 "PDF로 저장"으로 선택하면 됩니다.</div>
     <div style="display:flex; gap:8px; margin-bottom:12px">
       <button class="btn mini blue" id="btnPrintReport">🖨 인쇄 / PDF로 저장</button>
     </div>
@@ -3831,7 +3848,7 @@ const HELP = {
   },
   g_tableA: {
     t: "표① 수준별 예상 학생 — 작성 안내",
-    b: `<p>학기 초 <b>수준별로 예상했던 학생</b>의 반/번호를 적으면, 수행평가 분석 결과로 <b>실제 성취도</b>가 자동 판별됩니다([근거] 버튼으로 평가별 점수 확인, [적용]으로 확정).</p>
+    b: `<p>학기 초 <b>수준별로 예상했던 학생</b>의 반/번호를 적으면, 수행평가 분석 결과로 <b>실제 성취도</b>가 자동 판별됩니다([근거] 버튼으로 평가별 점수와 판별 근거를 확인할 수 있습니다).</p>
        <p>예상과 실제 성취도를 대조한 <b>결과 분석</b>을 직접 서술하고, <b>보완·조정 계획</b>을 세우세요. 아래에서 <b>1학기에 활용한 수업 방법</b>의 적절성도 분석해 봅니다.</p>
        <p style="margin-top:10px;padding-top:8px;border-top:1px solid var(--line)"><b>실제 성취도(성취도)에 대하여</b> — 연수를 위한 <b>가정된 결과</b>입니다. 실제 평가에서는 정기시험 결과까지 종합한 결과가 학기말 성취도입니다.</p>
        <p>여기서 성취도의 계산 기준은 앞의 <b>‘수행평가 점검’ 단계에서 설정하신 성취수준별 분할점수(변별 기준)의 합</b>입니다. 예를 들어 A의 변별 점수가 각각 25점, 15점이었다면, 전체 수행평가의 A 변별 점수는 40점이 됩니다.</p>`
@@ -4122,18 +4139,48 @@ function bindP2Events(c){
   };
   const tIn = c.querySelector("#p2TopicInput");
   const bT = c.querySelector("#p2TopicAdd");
-  const doAddTopic = ()=>{ if(!tIn.value.trim()) return; commit(); if(addAxis(p.matrix.topics, tIn.value)) renderContent(); else toast("이미 있는 주제입니다"); };
-  if(bT) bT.addEventListener("click", doAddTopic);
-  if(tIn) tIn.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); doAddTopic(); } });
-  const bTK = c.querySelector("#p2TopicFromKw");
-  if(bTK) bTK.addEventListener("click", ()=>{
-    const sel = p2SelectedKw();
-    if(!sel.length){ toast("1단계에서 선택한 핵심어가 없습니다"); return; }
+  /* v1.6.0 — 쉼표·줄바꿈으로 여러 주제를 한 번에 추가 */
+  const doAddTopic = ()=>{
+    const raw = tIn.value.trim();
+    if(!raw) return;
+    const items = raw.split(/[,\n、·]+/).map(x=>x.trim()).filter(Boolean);
+    if(!items.length) return;
     commit();
     let added = 0;
-    sel.forEach(k=>{ if(addAxis(p.matrix.topics, k.w)) added++; });
+    items.forEach(w=>{ if(addAxis(p.matrix.topics, w)) added++; });
+    tIn.value = "";
     renderContent();
-    toast(added ? `핵심어 ${added}개를 행으로 가져왔습니다` : "이미 모두 있습니다");
+    const el = document.getElementById("p2TopicInput"); if(el) el.focus();
+    if(!added) toast("이미 있는 주제입니다");
+    else if(items.length > 1) toast(`주제 ${added}개를 추가했습니다`);
+  };
+  if(bT) bT.addEventListener("click", doAddTopic);
+  if(tIn) tIn.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); doAddTopic(); } });
+  /* v1.6.0 — 내용(주제) 후보를 '연계 성취기준'에서 뽑는다 (핵심어는 명사 단위라 주제로 부적합) */
+  const bTopicStd = c.querySelector("#p2TopicFromStd");
+  if(bTopicStd) bTopicStd.addEventListener("click", ()=>{
+    const raw = (p.stds.rows||[]).map(r=>r.text||"").filter(Boolean).join("\n");
+    if(raw.trim().length < 6){ toast("먼저 핵심 아이디어 재구성 단계에서 연계 성취기준을 추가하세요"); return; }
+    const cands = extractKeywords(raw, 14).map(k=>k.w).filter(w=>w.length>=2);
+    if(!cands.length){ toast("성취기준에서 주제 후보를 찾지 못했습니다 — 직접 입력해 주세요"); return; }
+    p2TopicCands = cands;
+    renderContent();
+  });
+  c.querySelectorAll("[data-p2topic-cand]").forEach(b=>b.addEventListener("click", ()=>{
+    commit();
+    addAxis(p.matrix.topics, b.dataset.p2topicCand);
+    renderContent();
+  }));
+  const bCandClose = c.querySelector("#p2TopicCandClose");
+  if(bCandClose) bCandClose.addEventListener("click", ()=>{ p2TopicCands = []; renderContent(); });
+  const bTopicClear = c.querySelector("#p2TopicClear");
+  if(bTopicClear) bTopicClear.addEventListener("click", ()=>{
+    if(!confirm("내용(주제) 축을 모두 지울까요? 선택한 매트릭스 조합도 함께 지워집니다.")) return;
+    commit();
+    p.matrix.topics = [];
+    p.matrix.cells = {};
+    renderContent();
+    toast("내용(주제) 축을 모두 지웠습니다");
   });
   const mIn = c.querySelector("#p2MethodInput");
   const bM = c.querySelector("#p2MethodColAdd");
